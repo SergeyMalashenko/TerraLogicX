@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "uchastok",
+  "version": "0.3.0",
+  "description": "Hermes integration for comprehensive Russian cadastral parcel analysis through the UCHASTOK MCP server.",
+  "author": {
+    "name": "TerraLogicX"
+  },
+  "license": "MIT",
+  "keywords": [
+    "hermes",
+    "mcp",
+    "cadastre",
+    "nspd",
+    "russia",
+    "land"
+  ]
+}
