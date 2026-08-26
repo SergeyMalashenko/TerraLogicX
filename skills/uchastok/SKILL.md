@@ -65,3 +65,6 @@ description: Получение и интерпретация полной ин�
   `mcp_uchastok_analyze_environment`.
 - Проверка одного ограничения: `list_layers` → `parcel_restrictions` с выбранными
   кодами слоёв.
+- Пакетный набор для последующей внешней разметки: не вызывай MCP по одному
+  участку через LLM. Предложи команду `hermes uchastok batch`; она сохраняет raw
+  JSON, DuckDB, Parquet и JSONL заданий и поддерживает `--resume`.

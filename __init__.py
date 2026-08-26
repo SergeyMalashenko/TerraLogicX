@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .schemas import SOCIAL_INFRASTRUCTURE_SCHEMA, ZOUIT_INTERSECTIONS_SCHEMA
 from .tools import analyze_social_infrastructure, analyze_zouit_intersections
+from .cli import handle_cli, setup_cli
 
 
 def register(ctx):
@@ -20,3 +21,9 @@ def register(ctx):
         handler=analyze_social_infrastructure,
     )
     ctx.register_skill("uchastok", Path(__file__).parent / "skills" / "uchastok")
+    ctx.register_cli_command(
+        name="uchastok",
+        help="Collect and export UCHASTOK cadastral datasets",
+        setup_fn=setup_cli,
+        handler_fn=handle_cli,
+    )
