@@ -63,8 +63,8 @@ def read_cadastral_numbers(path: Path) -> list[str]:
         raise BatchError("Файл кадастровых номеров пуст")
     first_line = text.splitlines()[0].lower()
     if "cadastral_number" in first_line:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
-        rows = csv.DictReader(text.splitlines(), dialect=dialect)
+        delimiter = ";" if ";" in first_line else "\t" if "\t" in first_line else ","
+        rows = csv.DictReader(text.splitlines(), delimiter=delimiter)
         values = [str(row.get("cadastral_number", "")).strip() for row in rows]
     else:
         values = [line.strip() for line in text.splitlines() if line.strip()]

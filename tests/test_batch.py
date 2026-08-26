@@ -51,6 +51,19 @@ def _profile():
     }
 
 
+def test_read_single_column_csv_without_delimiter():
+    with tempfile.TemporaryDirectory() as directory:
+        source = Path(directory) / "cadastral_numbers.csv"
+        source.write_text(
+            "cadastral_number\n52:18:0070045:174\n52:18:0070045:175\n",
+            encoding="utf-8",
+        )
+        assert batch.read_cadastral_numbers(source) == [
+            "52:18:0070045:174",
+            "52:18:0070045:175",
+        ]
+
+
 def test_batch_export_and_resume():
     with tempfile.TemporaryDirectory() as directory:
         output = Path(directory)
@@ -82,4 +95,5 @@ def test_batch_export_and_resume():
 
 
 if __name__ == "__main__":
+    test_read_single_column_csv_without_delimiter()
     test_batch_export_and_resume()
