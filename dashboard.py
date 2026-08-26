@@ -36,6 +36,17 @@ def query(database: str, sql: str, params: tuple = ()) -> pd.DataFrame:
         connection.close()
 
 
+@st.cache_data(show_spinner=False)
+def has_table(database: str, table: str) -> bool:
+    connection = duckdb.connect(database, read_only=True)
+    try:
+        return bool(connection.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name=?", [table]
+        ).fetchone()[0])
+    finally:
+        connection.close()
+
+
 def _as_object(value):
     if value is None:
         return {}
@@ -86,6 +97,16 @@ def render_map(raw_path: str):
                     points.append({
                         "lat": location["lat"], "lon": location["lon"],
                         "name": item.get("name") or item.get("kind"), "category": category,
+                        "color": [30, 100, 220, 180],
+                    })
+        for category, block in ((profile.get("environment", {}) or {}).get("transport", {}) or {}).items():
+            for item in block.get("objects", []) if isinstance(block, dict) else []:
+                location = item.get("location") or {}
+                if location.get("lat") is not None and location.get("lon") is not None:
+                    points.append({
+                        "lat": location["lat"], "lon": location["lon"],
+                        "name": item.get("name") or item.get("kind"), "category": category,
+                        "color": [245, 145, 25, 200],
                     })
         layers = [pdk.Layer(
             "GeoJsonLayer", {"type": "FeatureCollection", "features": features},
@@ -95,7 +116,7 @@ def render_map(raw_path: str):
         if points:
             layers.append(pdk.Layer(
                 "ScatterplotLayer", points, get_position="[lon, lat]", get_radius=18,
-                get_fill_color=[30, 100, 220, 180], pickable=True,
+                get_fill_color="color", pickable=True,
             ))
         rings = _coordinates(parcel_geometry)
         flat = [point for ring in rings for point in ring]
@@ -150,8 +171,8 @@ def main():
         f"{row['data_completeness'] * 100:.0f}%" if pd.notna(row["data_completeness"]) else "—",
     )
 
-    overview, restrictions, social, detail = st.tabs([
-        "Обзор", "ЗОУИТ", "Инфраструктура", "Карточка участка",
+    overview, restrictions, social, transport, detail = st.tabs([
+        "Обзор", "ЗОУИТ", "Социальная инфраструктура", "Транспорт", "Карточка участка",
     ])
     with overview:
         st.subheader(f"Сводные данные: {number}")
@@ -186,6 +207,28 @@ def main():
             counts = objects.groupby("category", as_index=False).size()
             st.bar_chart(counts, x="category", y="size")
         st.dataframe(objects, width="stretch", hide_index=True)
+
+    with transport:
+        if not has_table(database, "transport_objects"):
+            st.info("Транспортный слой ещё не создан. Повторите пакетный сбор плагином версии 0.6.0.")
+        else:
+            transport_objects = query(database, """
+                SELECT category_title, name, kind, source_status,
+                       round(distance_m, 1) AS distance_m,
+                       round(distance_from_centroid_m, 1) AS distance_from_centroid_m,
+                       round(azimuth_deg, 1) AS azimuth_deg
+                FROM transport_objects
+                WHERE run_id=? AND cadastral_number=?
+                ORDER BY distance_m NULLS LAST
+            """, (run_id, number))
+            if transport_objects.empty:
+                st.info("Для выбранного участка транспортные объекты не получены")
+            else:
+                nearest_transport = transport_objects.dropna(subset=["distance_m"])
+                if not nearest_transport.empty:
+                    nearest = nearest_transport.groupby("category_title", as_index=False)["distance_m"].min()
+                    st.bar_chart(nearest, x="category_title", y="distance_m")
+                st.dataframe(transport_objects, width="stretch", hide_index=True)
 
     with detail:
         a, b, c, d = st.columns(4)

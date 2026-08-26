@@ -34,7 +34,19 @@ except ImportError:  # Direct execution from a source checkout.
 
 RETRYABLE_CODES = {"upstream_unavailable", "all_proxies_blocked", "upstream_error"}
 FINAL_STATUSES = {"completed", "partial"}
-TABLES_TO_EXPORT = ("parcels", "features", "zones", "social_objects", "annotation_tasks")
+TABLES_TO_EXPORT = (
+    "parcels", "features", "zones", "social_objects", "transport_objects",
+    "annotation_tasks",
+)
+TRANSPORT_CATEGORY_TITLES = {
+    "metro": "Метро",
+    "transit_stops": "Остановки общественного транспорта",
+    "railway_stations": "ЖД вокзалы и платформы",
+    "airports": "Аэропорты",
+    "roads": "Дороги",
+    "railways": "Железные дороги",
+    "level_crossings": "ЖД переезды",
+}
 
 
 class BatchError(RuntimeError):
@@ -189,6 +201,14 @@ class DatasetStore:
                 inside_target_circle BOOLEAN, distance_m DOUBLE,
                 PRIMARY KEY (run_id, cadastral_number, category, object_index)
             );
+            CREATE TABLE IF NOT EXISTS transport_objects (
+                run_id VARCHAR, cadastral_number VARCHAR, category VARCHAR,
+                category_title VARCHAR, object_index INTEGER, name VARCHAR,
+                kind VARCHAR, osm_ref VARCHAR, source_status VARCHAR,
+                distance_m DOUBLE, distance_from_centroid_m DOUBLE,
+                azimuth_deg DOUBLE, lat DOUBLE, lon DOUBLE, metadata_json JSON,
+                PRIMARY KEY (run_id, cadastral_number, category, object_index)
+            );
             CREATE TABLE IF NOT EXISTS annotation_tasks (
                 task_id VARCHAR PRIMARY KEY, run_id VARCHAR, dataset_version VARCHAR,
                 cadastral_number VARCHAR, payload_json JSON
@@ -322,6 +342,52 @@ class DatasetStore:
                      item["osm_ref"], item["inside_target_circle"], item["distance_m"]],
                 )
 
+        self.connection.execute(
+            "DELETE FROM transport_objects WHERE run_id=? AND cadastral_number=?", [run_id, cn]
+        )
+        transport_summary = {}
+        environment = profile.get("environment", {}) or {}
+        transport = environment.get("transport", {}) if isinstance(environment, Mapping) else {}
+        if not isinstance(transport, Mapping):
+            transport = {}
+        for category, title in TRANSPORT_CATEGORY_TITLES.items():
+            block = transport.get(category, {})
+            if not isinstance(block, Mapping):
+                continue
+            objects = block.get("objects", [])
+            if not isinstance(objects, list):
+                objects = []
+            distances = []
+            for index, item in enumerate(objects):
+                if not isinstance(item, Mapping):
+                    continue
+                location = item.get("location") if isinstance(item.get("location"), Mapping) else {}
+                distance = item.get("distance_m")
+                if isinstance(distance, (int, float)):
+                    distances.append(float(distance))
+                known = {
+                    "name", "kind", "osm_ref", "distance_m", "distance_from_centroid_m",
+                    "azimuth_deg", "location",
+                }
+                metadata = {key: value for key, value in item.items() if key not in known}
+                self.connection.execute(
+                    "INSERT INTO transport_objects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        run_id, cn, category, title, index,
+                        item.get("name") or item.get("kind") or title,
+                        item.get("kind"), item.get("osm_ref"), block.get("status"), distance,
+                        item.get("distance_from_centroid_m"), item.get("azimuth_deg"),
+                        location.get("lat"), location.get("lon"),
+                        json.dumps(metadata, ensure_ascii=False),
+                    ],
+                )
+            transport_summary[category] = {
+                "title": title,
+                "status": block.get("status"),
+                "count_total": block.get("count_total", len(objects)),
+                "nearest_m": min(distances) if distances else block.get("nearest_m"),
+            }
+
         task_id = f"{dataset_version}:{cn}"
         task = {
             "task_id": task_id,
@@ -346,6 +412,7 @@ class DatasetStore:
                 "target_circle_radius_m": social["target_radius_m"],
                 "nearest_m": nearest,
             },
+            "transport_summary": transport_summary,
             "risks": [
                 {key: factor.get(key) for key in ("code", "title", "severity", "category", "comment")}
                 for factor in factors

@@ -32,6 +32,22 @@ def _profile():
             }]
         },
         "environment": {
+            "transport": {
+                "transit_stops": {
+                    "status": "ok",
+                    "count_total": 1,
+                    "nearest_m": 145.0,
+                    "objects": [{
+                        "name": "Улица Тестовая",
+                        "kind": "bus_stop",
+                        "osm_ref": "N/22",
+                        "distance_m": 145.0,
+                        "distance_from_centroid_m": 300.0,
+                        "azimuth_deg": 90.0,
+                        "location": {"lat": 56.003, "lon": 43.002},
+                    }],
+                }
+            },
             "social": {
                 "schools": {
                     "status": "ok",
@@ -81,8 +97,10 @@ def test_batch_export_and_resume():
         assert calls == [("52:18:0070045:174", "standard")]
         task = json.loads((output / "labels/test-v1_annotation_tasks.jsonl").read_text())
         assert task["restrictions"]["zouit_union_pct"] > 49
+        assert task["transport_summary"]["transit_stops"]["nearest_m"] == 145.0
         assert "score_total" not in json.dumps(task)
         assert (output / "processed/test-run_features.parquet").exists()
+        assert (output / "processed/test-run_transport_objects.parquet").exists()
 
         def must_not_fetch(number, depth):
             raise AssertionError("completed parcel was fetched during resume")

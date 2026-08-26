@@ -1,6 +1,6 @@
 name: uchastok
-version: "0.5.1"
-description: UCHASTOK MCP, spatial analytics, and resumable cadastral dataset collection
+version: "0.6.0"
+description: UCHASTOK MCP, spatial analytics, transport, and resumable dataset collection
 requires_env:
   - name: UCHASTOK_API_KEY
     description: API key used to request parcel and zone geometries from UCHASTOK REST API
