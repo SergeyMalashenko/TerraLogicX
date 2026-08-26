@@ -1,5 +1,5 @@
 name: uchastok
-version: "0.4.1"
+version: "0.5.0"
 description: UCHASTOK MCP, spatial analytics, and resumable cadastral dataset collection
 requires_env:
   - name: UCHASTOK_API_KEY

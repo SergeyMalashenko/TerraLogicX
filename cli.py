@@ -1,8 +1,14 @@
-"""Hermes CLI integration for batch dataset collection."""
+"""Hermes CLI integration for collection and dataset exploration."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
-from .batch import BatchError, collect_batch, default_run_id, read_cadastral_numbers
+try:
+    from .batch import BatchError, collect_batch, default_run_id, read_cadastral_numbers
+except ImportError:  # Direct execution from a source checkout.
+    from batch import BatchError, collect_batch, default_run_id, read_cadastral_numbers
 
 
 def setup_cli(parser):
@@ -15,12 +21,26 @@ def setup_cli(parser):
     batch.add_argument("--depth", choices=["minimal", "standard", "full"], default="standard")
     batch.add_argument("--workers", type=int, default=1, choices=range(1, 5))
     batch.add_argument("--resume", action="store_true")
+    dashboard = commands.add_parser("dashboard", help="Open the dataset dashboard")
+    dashboard.add_argument("--dataset", required=True, type=Path, help="Dataset directory or DuckDB file")
+    dashboard.add_argument("--host", default="127.0.0.1")
+    dashboard.add_argument("--port", type=int, default=8501)
     parser.set_defaults(func=handle_cli)
 
 
 def handle_cli(args):
-    if getattr(args, "uchastok_command", None) != "batch":
-        print("Usage: hermes uchastok batch --input parcels.csv --output ./dataset")
+    command = getattr(args, "uchastok_command", None)
+    if command == "dashboard":
+        dashboard_path = Path(__file__).with_name("dashboard.py")
+        environment = os.environ.copy()
+        environment["UCHASTOK_DATASET_PATH"] = str(args.dataset.resolve())
+        return subprocess.call([
+            sys.executable, "-m", "streamlit", "run", str(dashboard_path),
+            "--server.address", args.host, "--server.port", str(args.port),
+            "--server.headless", "true",
+        ], env=environment)
+    if command != "batch":
+        print("Usage: hermes uchastok {batch|dashboard}")
         return 2
     try:
         numbers = read_cadastral_numbers(args.input)
