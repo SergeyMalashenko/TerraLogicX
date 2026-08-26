@@ -134,31 +134,30 @@ def main():
         FROM parcels p LEFT JOIN features f USING (run_id, cadastral_number)
         WHERE p.run_id=? ORDER BY p.cadastral_number
     """, (run_id,))
+    if data.empty:
+        st.warning("В выбранном запуске нет участков")
+        return
+    number = st.sidebar.selectbox("Кадастровый номер", data["cadastral_number"].tolist())
+    filtered = data[data["cadastral_number"] == number]
+    row = filtered.iloc[0]
 
-    statuses = st.sidebar.multiselect("Статус", sorted(data["status"].dropna().unique()), default=sorted(data["status"].dropna().unique()))
-    categories = sorted(data["category"].dropna().unique())
-    selected_categories = st.sidebar.multiselect("Категория земель", categories, default=categories)
-    filtered = data[data["status"].isin(statuses)]
-    if categories:
-        filtered = filtered[filtered["category"].isin(selected_categories)]
-
-    total, completed, partial, failed = st.columns(4)
-    total.metric("Участков", len(filtered))
-    completed.metric("Успешно", int((filtered["status"] == "completed").sum()))
-    partial.metric("Частично", int((filtered["status"] == "partial").sum()))
-    failed.metric("Ошибки", int((filtered["status"] == "failed").sum()))
+    identifier, status, partial, completeness = st.columns(4)
+    identifier.metric("Кадастровый номер", number)
+    status.metric("Статус", str(row["status"]))
+    partial.metric("Частичные данные", "Да" if bool(row["partial"]) else "Нет")
+    completeness.metric(
+        "Полнота",
+        f"{row['data_completeness'] * 100:.0f}%" if pd.notna(row["data_completeness"]) else "—",
+    )
 
     overview, restrictions, social, detail = st.tabs([
         "Обзор", "ЗОУИТ", "Инфраструктура", "Карточка участка",
     ])
     with overview:
-        st.subheader("Сравнение участков")
-        chart = filtered.dropna(subset=["area_registry_m2", "cost_per_m2"])
-        if not chart.empty:
-            st.scatter_chart(chart, x="area_registry_m2", y="cost_per_m2", size="social_inside_count", color="zouit_union_pct")
+        st.subheader(f"Сводные данные: {number}")
         columns = ["cadastral_number", "status", "area_registry_m2", "cost_per_m2", "zouit_union_pct", "social_inside_count", "critical_risk_count", "high_risk_count"]
         st.dataframe(filtered[columns], width="stretch", hide_index=True)
-        st.download_button("Скачать выборку CSV", filtered.to_csv(index=False).encode("utf-8-sig"), f"{run_id}_selection.csv", "text/csv")
+        st.download_button("Скачать данные участка CSV", filtered.to_csv(index=False).encode("utf-8-sig"), f"{run_id}_{number.replace(':', '_')}.csv", "text/csv")
 
     with restrictions:
         zones = query(database, """
@@ -166,9 +165,8 @@ def main():
                    round(overlap_m2, 2) AS overlap_m2,
                    round(least(overlap_ratio, 100.0), 3) AS parcel_share_pct,
                    building_impact
-            FROM zones WHERE run_id=? ORDER BY overlap_m2 DESC
-        """, (run_id,))
-        zones = zones[zones["cadastral_number"].isin(filtered["cadastral_number"])]
+            FROM zones WHERE run_id=? AND cadastral_number=? ORDER BY overlap_m2 DESC
+        """, (run_id, number))
         st.metric("Пересечений", len(zones))
         if not zones.empty:
             top = zones.groupby("layer_title", as_index=False)["overlap_m2"].sum().nlargest(15, "overlap_m2")
@@ -179,9 +177,8 @@ def main():
         objects = query(database, """
             SELECT cadastral_number, category, name, kind, inside_target_circle,
                    round(distance_m, 1) AS distance_m
-            FROM social_objects WHERE run_id=? ORDER BY distance_m
-        """, (run_id,))
-        objects = objects[objects["cadastral_number"].isin(filtered["cadastral_number"])]
+            FROM social_objects WHERE run_id=? AND cadastral_number=? ORDER BY distance_m
+        """, (run_id, number))
         inside_only = st.checkbox("Только внутри целевой окружности", value=True)
         if inside_only:
             objects = objects[objects["inside_target_circle"]]
@@ -191,26 +188,21 @@ def main():
         st.dataframe(objects, width="stretch", hide_index=True)
 
     with detail:
-        if filtered.empty:
-            st.info("Нет участков, соответствующих фильтрам")
-        else:
-            number = st.selectbox("Кадастровый номер", filtered["cadastral_number"].tolist())
-            row = filtered[filtered["cadastral_number"] == number].iloc[0]
-            a, b, c, d = st.columns(4)
-            a.metric("Площадь, м²", f"{row['area_registry_m2']:,.1f}" if pd.notna(row["area_registry_m2"]) else "—")
-            b.metric("Стоимость за м²", f"{row['cost_per_m2']:,.2f}" if pd.notna(row["cost_per_m2"]) else "—")
-            c.metric("ЗОУИТ", int(row["zouit_count"]) if pd.notna(row["zouit_count"]) else 0)
-            d.metric("Покрытие ЗОУИТ", f"{row['zouit_union_pct']:.2f}%" if pd.notna(row["zouit_union_pct"]) else "—")
-            tasks = query(database, "SELECT payload_json FROM annotation_tasks WHERE run_id=? AND cadastral_number=?", (run_id, number))
-            if not tasks.empty:
-                payload = _as_object(tasks.iloc[0]["payload_json"])
-                st.subheader("Риски")
-                st.dataframe(pd.DataFrame(payload.get("risks", [])), width="stretch", hide_index=True)
-                if payload.get("data_quality", {}).get("partial"):
-                    st.warning("Данные частичные. Отсутствуют блоки: " + ", ".join(payload["data_quality"].get("missing_blocks", [])))
-            if isinstance(row["raw_path"], str):
-                st.subheader("Карта участка, зон и социальных объектов")
-                render_map(row["raw_path"])
+        a, b, c, d = st.columns(4)
+        a.metric("Площадь, м²", f"{row['area_registry_m2']:,.1f}" if pd.notna(row["area_registry_m2"]) else "—")
+        b.metric("Стоимость за м²", f"{row['cost_per_m2']:,.2f}" if pd.notna(row["cost_per_m2"]) else "—")
+        c.metric("ЗОУИТ", int(row["zouit_count"]) if pd.notna(row["zouit_count"]) else 0)
+        d.metric("Покрытие ЗОУИТ", f"{row['zouit_union_pct']:.2f}%" if pd.notna(row["zouit_union_pct"]) else "—")
+        tasks = query(database, "SELECT payload_json FROM annotation_tasks WHERE run_id=? AND cadastral_number=?", (run_id, number))
+        if not tasks.empty:
+            payload = _as_object(tasks.iloc[0]["payload_json"])
+            st.subheader("Риски")
+            st.dataframe(pd.DataFrame(payload.get("risks", [])), width="stretch", hide_index=True)
+            if payload.get("data_quality", {}).get("partial"):
+                st.warning("Данные частичные. Отсутствуют блоки: " + ", ".join(payload["data_quality"].get("missing_blocks", [])))
+        if isinstance(row["raw_path"], str):
+            st.subheader("Карта участка, зон и социальных объектов")
+            render_map(row["raw_path"])
 
 
 if __name__ == "__main__":
