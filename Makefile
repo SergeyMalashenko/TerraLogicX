@@ -18,7 +18,11 @@ SYNC_REPOS  := geodocs-store pyrgis pyrgis-agents pynspd-agents pyosm-agents py2
 # pynspd (форк) — reference-only: runtime-контур резолвит пакет pynspd с PyPI.
 SUBMODULES  := $(SYNC_REPOS) pynspd
 
-.PHONY: help init sync up stack viewer test pull bump status
+.PHONY: help init sync up stack viewer test pull bump status _warn-2gis
+
+_warn-2gis:
+	@[ -n "$$PY2GIS_API_KEY" ] || [ -f py2gis-agents/.env ] || \
+		echo "WARN: PY2GIS_API_KEY не задан (env или py2gis-agents/.env) — py2gis-mcp :8003 не поднимется, контур деградирует без 2GIS"
 
 help: ## список целей
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -38,10 +42,10 @@ sync: init ## uv sync --all-extras по порядку зависимостей 
 	@terralogic-engine/.venv/bin/python -c "import terralogic_engine, mcp, streamlit"
 	@echo "OK: все окружения собраны и импортируются (GEODOCS_HOME=$(GEODOCS_HOME))"
 
-up: sync ## развернуть всё с нуля и поднять стек (engine :8004 + источники :8001/:8002/:8003/:8005)
+up: sync _warn-2gis ## развернуть всё с нуля и поднять стек (engine :8004 + источники :8001/:8002/:8003/:8005)
 	terralogic-engine/scripts/run-local-stack.sh --engine
 
-stack: ## поднять стек без пересборки окружений (предполагает выполненный make sync)
+stack: _warn-2gis ## поднять стек без пересборки окружений (предполагает выполненный make sync)
 	terralogic-engine/scripts/run-local-stack.sh --engine
 
 viewer: ## viewer :8501 (второй терминал; make viewer VIEWER_HOST=0.0.0.0 для сети)

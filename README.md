@@ -51,7 +51,10 @@ terralogic-view :8501 (read-only Streamlit поверх case-store)
 
 ## Развёртывание с нуля
 
-Требования: `git`, `uv`, SSH-доступ к GitHub.
+Требования: `git`, `uv`, SSH-доступ к GitHub. Для полного стека нужен ключ
+2GIS API (`PY2GIS_API_KEY` в окружении или `py2gis-agents/.env`) — без него
+`py2gis-mcp` не поднимется, остальной контур работает, но без слоя 2GIS
+(`make up`/`make stack` выводят предупреждение).
 
 ```bash
 git clone --recurse-submodules git@github.com:SergeyMalashenko/TerraLogicX.git
