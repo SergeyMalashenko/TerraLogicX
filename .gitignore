@@ -1,0 +1,13 @@
+# ---- локальные данные и артефакты окружения (не входят в мета-репозиторий) ----
+geodocs-data/
+documents/
+documents-*.zip
+reports/
+*.pdf
+reglamenty*
+rgis-*.json
+explore_*.py
+summarize_batch.py
+kimi-debug-*
+__pycache__/
+.DS_Store

@@ -1,0 +1,24 @@
+[submodule "geodocs-store"]
+	path = geodocs-store
+	url = git@github.com:SergeyMalashenko/geodocs-store.git
+[submodule "pynspd"]
+	path = pynspd
+	url = git@github.com:SergeyMalashenko/pynspd.git
+[submodule "pynspd-agents"]
+	path = pynspd-agents
+	url = git@github.com:SergeyMalashenko/pynspd-agents.git
+[submodule "pyrgis"]
+	path = pyrgis
+	url = git@github.com:SergeyMalashenko/pyrgis.git
+[submodule "pyrgis-agents"]
+	path = pyrgis-agents
+	url = git@github.com:SergeyMalashenko/pyrgis-agents.git
+[submodule "pyosm-agents"]
+	path = pyosm-agents
+	url = git@github.com:SergeyMalashenko/pyosm-agents.git
+[submodule "py2gis-agents"]
+	path = py2gis-agents
+	url = git@github.com:SergeyMalashenko/py2gis-agents.git
+[submodule "terralogic-engine"]
+	path = terralogic-engine
+	url = git@github.com:SergeyMalashenko/terralogic-engine.git
